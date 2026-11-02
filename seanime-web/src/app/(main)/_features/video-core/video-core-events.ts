@@ -22,7 +22,7 @@ import { SubtitleManagerTrackDeselectedEvent, SubtitleManagerTrackSelectedEvent 
 import { vc_autoNextAtom, VideoCore_VideoSubtitleTrack, VideoCoreLifecycleState } from "@/app/(main)/_features/video-core/video-core.atoms"
 import { detectSubtitleType, isSubtitleFile } from "@/app/(main)/_features/video-core/video-core.utils"
 import { useWebsocketMessageListener, useWebsocketSender } from "@/app/(main)/_hooks/handle-websockets"
-import { clientIdAtom } from "@/app/websocket-provider"
+import { clientIdAtom, websocketConnectedAtom } from "@/app/websocket-provider"
 import { logger } from "@/lib/helpers/debug"
 import { WSEvents } from "@/lib/server/ws-events"
 import { useAtomValue, useSetAtom } from "jotai"
@@ -413,25 +413,58 @@ export function useVideoCoreSetupEvents(id: string,
         })
     }
 
+    // Playback status heartbeat.    //
+    // The effect must not depend on the identity of `state.playbackInfo`: the player
+    // state object is recreated on every parent render, which kept tearing down and
+    // re-creating the interval, so the server rarely received `video-status` events
+    // (no watch progress, no continuity). Use the playback id as the dependency and
+    // send from `timeupdate` so the heartbeat also survives timer throttling.
+    const playbackInfoRef = React.useRef(state.playbackInfo)
+    playbackInfoRef.current = state.playbackInfo
+
     React.useEffect(() => {
-        if (!isActivePlayer || !state.playbackInfo || !videoElement || !clientId) return
+        if (!isActivePlayer || !videoElement || !clientId) return
         const player = videoElement
 
-        const interval = setInterval(() => {
-            // log.trace("Sending video status")
+        let lastSentAt = 0
+
+        const sendStatus = () => {
+            const info = playbackInfoRef.current
+            if (!info) return
+            const now = Date.now()
+            if (now - lastSentAt < 900) return
+            lastSentAt = now
             sendEvent<VideoCoreStatusEventPayload>("video-status", {
-                id: state.playbackInfo?.id || "",
+                id: info.id || "",
                 clientId: clientId,
                 currentTime: player.currentTime,
                 duration: player.duration,
                 paused: player.paused,
             })
-        }, 1000)
+        }
+
+        sendStatus()
+        player.addEventListener("timeupdate", sendStatus)
+        const interval = setInterval(sendStatus, 2000)
 
         return () => {
+            player.removeEventListener("timeupdate", sendStatus)
             clearInterval(interval)
         }
-    }, [state.playbackInfo, isActivePlayer, clientId, videoElement])
+    }, [state.playbackInfo?.id, isActivePlayer, clientId, videoElement])
+
+    // Re-register the playback state after a (re)connection.
+    //
+    // `video-loaded` is only sent when the playback id changes. If the WebSocket was down
+    // at that moment (server restart, network drop), the server never learns about the
+    // session and silently discards every `video-status` that follows, so watch progress
+    // is lost until the next episode is started. Re-send it whenever the socket connects.
+    const isWebsocketConnected = useAtomValue(websocketConnectedAtom)
+    React.useEffect(() => {
+        if (!isWebsocketConnected) return
+        if (!state.playbackInfo?.id) return
+        dispatchVideoLoadedEvent()
+    }, [isWebsocketConnected, state.playbackInfo?.id])
 
     /**
      * Upload subtitle files
