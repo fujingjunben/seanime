@@ -40,6 +40,7 @@ import {
     __onlinestream_dubbedPreferenceByMediaAtom,
     __onlinestream_qualityAtom,
     __onlinestream_selectedEpisodeNumberAtom,
+    __onlinestream_providerPreferenceByMediaAtom,
     __onlinestream_selectedProviderAtom,
     __onlinestream_selectedServerAtom,
     __onlinestream_subtitlePreferenceByMediaAtom,
@@ -332,7 +333,10 @@ export function OnlinestreamPage({ animeEntry, animeEntryLoading, hideBackButton
     const [quality, setQuality] = useAtom(__onlinestream_qualityAtom)
     const [dubbedPreferenceByMedia, setDubbedPreferenceByMedia] = useAtom(__onlinestream_dubbedPreferenceByMediaAtom)
     const [preferredProvider, setPreferredProvider] = useAtom(__onlinestream_selectedProviderAtom)
-    const [provider, setProvider] = React.useState(preferredProvider)
+    const [providerPreferenceByMedia, setProviderPreferenceByMedia] = useAtom(__onlinestream_providerPreferenceByMediaAtom)
+    const [provider, setProvider] = React.useState<string | null>(
+        (mediaId ? providerPreferenceByMedia[String(mediaId)] : undefined) ?? preferredProvider,
+    )
     const [, setSubtitlePreferenceByMedia] = useAtom(__onlinestream_subtitlePreferenceByMediaAtom)
     const isLoadingFromWatchPartyRef = React.useRef(false)
     const dubbedPreferenceKey = mediaId ? String(mediaId) : null
@@ -372,9 +376,10 @@ export function OnlinestreamPage({ animeEntry, animeEntryLoading, hideBackButton
         if (previousMediaIdRef.current === mediaId) return
         previousMediaIdRef.current = mediaId
         if (isLoadingFromWatchPartyRef.current) return
-        setProvider(preferredProvider)
+        // Each anime remembers the provider it was last watched with
+        setProvider(mediaId ? (providerPreferenceByMedia[String(mediaId)] ?? preferredProvider) : preferredProvider)
         setServer(preferredServer)
-    }, [mediaId, preferredProvider, preferredServer])
+    }, [mediaId, preferredProvider, preferredServer, providerPreferenceByMedia])
 
     const [overrideStreamType, setOverrideStreamType] = React.useState<VideoCore_VideoPlaybackInfo["streamType"] | null>(null)
 
@@ -659,8 +664,11 @@ export function OnlinestreamPage({ animeEntry, animeEntryLoading, hideBackButton
         savePreviousStateThen(() => {
             setPreferredProvider(provider)
             setProvider(provider)
+            if (mediaId) {
+                setProviderPreferenceByMedia(prev => ({ ...prev, [String(mediaId)]: provider }))
+            }
         })
-    }, [videoSource, setPreferredProvider])
+    }, [videoSource, setPreferredProvider, mediaId, setProviderPreferenceByMedia])
 
     // Server
     const changeServer = React.useCallback((server: string) => {

@@ -15,6 +15,13 @@ export type OnlinestreamSubtitlePreference = {
     label?: string
 }
 
+export const __onlinestream_providerPreferenceByMediaAtom = atomWithStorage<Record<string, string>>(
+    "sea-onlinestream-provider-preference-by-media",
+    {},
+    undefined,
+    { getOnInit: true },
+)
+
 export const __onlinestream_dubbedPreferenceByMediaAtom = atomWithStorage<Record<string, boolean>>(
     "sea-onlinestream-dubbed-preference-by-media",
     {},
