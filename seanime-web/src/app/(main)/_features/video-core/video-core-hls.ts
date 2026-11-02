@@ -104,7 +104,20 @@ export function useVideoCoreHls({
             return
         }
 
-        if (Hls.isSupported()) {
+        // iOS: prefer the native HLS player.
+        // Since iOS 17.1 Safari exposes ManagedMediaSource, so hls.js is "supported" there,
+        // but inline playback through MSE renders a black frame (audio only) on some
+        // versions, while the native player renders inline correctly.
+        const nativeHlsSupported = videoElement.canPlayType("application/vnd.apple.mpegurl") !== ""
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+            (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+        const preferNativeHls = isIOS && nativeHlsSupported
+
+        if (preferNativeHls) {
+            hlsLog.info("iOS detected, using the native HLS player")
+        }
+
+        if (Hls.isSupported() && !preferNativeHls) {
             hlsLog.info("HLS.js supported, initializing HLS instance")
 
             // Destroy existing instance
