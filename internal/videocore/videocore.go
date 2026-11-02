@@ -738,6 +738,8 @@ func (vc *VideoCore) SendGetPlaybackState() {
 
 var playerEventResponseTimeout = 5 * time.Second
 
+var videoStatusEventCounter atomic.Int64
+
 func waitPlayerEventResp(done <-chan struct{}) bool {
 	select {
 	case <-done:
@@ -875,18 +877,14 @@ func (vc *VideoCore) listenToClientEvents() {
 					eventClientID = clientEvent.ClientID
 				}
 
-				// Validate that the event is from the current client
+				// Validate that the event is from the current client.
+				// A new playback (video-loaded) always takes over the session, even if the
+				// previous client is still connected: otherwise playing on a second device
+				// is not tracked at all (no progress, no continuity, no plugin events).
 				takeover := false
 				currentState, hasState := vc.GetPlaybackState()
 				if hasState && eventClientID != "" && eventClientID != currentState.ClientId {
-					ownerConnected := false
-					for _, clientID := range vc.wsEventManager.GetClientIds() {
-						if clientID == currentState.ClientId {
-							ownerConnected = true
-							break
-						}
-					}
-					if ownerConnected || playerEvent.Type != PlayerEventVideoLoaded {
+					if playerEvent.Type != PlayerEventVideoLoaded {
 						continue
 					}
 					takeover = true
@@ -1000,6 +998,9 @@ func (vc *VideoCore) listenToClientEvents() {
 						})
 					}
 				case PlayerEventVideoStatus:
+					if n := videoStatusEventCounter.Add(1); n%20 == 0 {
+						vc.logger.Trace().Int64("count", n).Msg("videocore: Received video-status events")
+					}
 					payload := &clientVideoStatusPayload{}
 					if err := playerEvent.UnmarshalAs(&payload); err == nil {
 						vc.updatePlaybackStatusFn(func() {

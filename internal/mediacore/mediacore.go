@@ -373,13 +373,18 @@ func (c *Coordinator) listenToBackendEvents(target player.Target, b Backend) {
 		c.mu.Lock()
 		_, isLoaded := ev.(*player.PlaybackLoadedEvent)
 		if c.session.Target != key.Target || c.session.ClientID != key.ClientID {
-			if c.session.Target == "" && isLoaded {
+			if isLoaded {
+				// A new playback takes over the session, even if the previous client is
+				// still connected (e.g. playing on another device).
 				c.activeTarget = key.Target
 				c.session = player.SessionKey{
 					Target:     key.Target,
 					ClientID:   key.ClientID,
 					PlaybackID: key.PlaybackID,
 				}
+				c.activePlaybackState = nil
+				c.activePlaybackStatus = nil
+				c.activePlaybackInfo = nil
 			} else {
 				c.mu.Unlock()
 				continue
