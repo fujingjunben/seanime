@@ -50,3 +50,21 @@ func (db *Database) DeleteOnlinestreamMapping(provider string, mediaId int) erro
 	onlinestreamMappingCache.Delete(formatOnlinestreamMappingCacheKey(provider, mediaId))
 	return nil
 }
+
+func (db *Database) GetOnlinestreamPreferences() ([]*models.OnlinestreamPreference, error) {
+	var res []*models.OnlinestreamPreference
+	err := db.gormdb.Find(&res).Error
+	return res, err
+}
+
+func (db *Database) UpsertOnlinestreamPreference(pref *models.OnlinestreamPreference) error {
+	var existing models.OnlinestreamPreference
+	err := db.gormdb.Where("media_id = ?", pref.MediaID).First(&existing).Error
+	if err == nil {
+		existing.Provider = pref.Provider
+		existing.Server = pref.Server
+		existing.Quality = pref.Quality
+		return db.gormdb.Save(&existing).Error
+	}
+	return db.gormdb.Create(pref).Error
+}

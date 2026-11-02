@@ -559,6 +559,16 @@ type OnlinestreamMapping struct {
 	AnimeID  string `gorm:"column:anime_id" json:"anime_id"` // ID from search result, used to fetch episodes
 }
 
+// OnlinestreamPreference holds the online streaming choices (provider, server, quality) for an anime.
+// Stored server-side so that every client shares them.
+type OnlinestreamPreference struct {
+	BaseModel
+	MediaID  int    `gorm:"column:media_id;uniqueIndex" json:"mediaId"`
+	Provider string `gorm:"column:provider" json:"provider"`
+	Server   string `gorm:"column:server" json:"server"`
+	Quality  string `gorm:"column:quality" json:"quality"`
+}
+
 // +---------------------+
 // |       Debrid        |
 // +---------------------+

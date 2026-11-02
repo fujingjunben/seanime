@@ -6,6 +6,7 @@ import {
     useOnlineStreamEmptyCache,
     useRefreshOnlineStreamEpisodeSource,
 } from "@/api/hooks/onlinestream.hooks"
+import { useGetOnlinestreamPreferences, useSaveOnlinestreamPreference } from "@/api/hooks/onlinestream-preferences.hooks"
 import { serverStatusAtom } from "@/app/(main)/_atoms/server-status.atoms"
 import { EpisodeGridItem } from "@/app/(main)/_features/anime/_components/episode-grid-item"
 import { MediaEpisodeInfoModal } from "@/app/(main)/_features/media/_components/media-episode-info-modal"
@@ -337,6 +338,22 @@ export function OnlinestreamPage({ animeEntry, animeEntryLoading, hideBackButton
     const [provider, setProvider] = React.useState<string | null>(
         (mediaId ? providerPreferenceByMedia[String(mediaId)] : undefined) ?? preferredProvider,
     )
+    const { data: serverPreferences } = useGetOnlinestreamPreferences()
+    const { mutate: saveOnlinestreamPreference } = useSaveOnlinestreamPreference()
+    const serverPreference = React.useMemo(
+        () => serverPreferences?.find(pref => pref.mediaId === mediaId),
+        [serverPreferences, mediaId],
+    )
+
+    const savePreferences = React.useCallback((values: { provider?: string | null, server?: string | undefined, quality?: string | undefined }) => {
+        if (!mediaId) return
+        saveOnlinestreamPreference({
+            mediaId: Number(mediaId),
+            provider: values.provider ?? undefined,
+            server: values.server ?? undefined,
+            quality: values.quality ?? undefined,
+        })
+    }, [mediaId, saveOnlinestreamPreference])
     const [, setSubtitlePreferenceByMedia] = useAtom(__onlinestream_subtitlePreferenceByMediaAtom)
     const isLoadingFromWatchPartyRef = React.useRef(false)
     const dubbedPreferenceKey = mediaId ? String(mediaId) : null
@@ -365,6 +382,14 @@ export function OnlinestreamPage({ animeEntry, animeEntryLoading, hideBackButton
         previousPreferredProviderRef.current = preferredProvider
         setProvider(preferredProvider)
     }, [preferredProvider])
+
+    // Preferences stored on the server are shared by every client
+    React.useEffect(() => {
+        if (!serverPreference) return
+        if (serverPreference.provider) setProvider(serverPreference.provider)
+        if (serverPreference.server) setServer(serverPreference.server)
+        if (serverPreference.quality) setQuality(serverPreference.quality)
+    }, [serverPreference])
 
     React.useEffect(() => {
         if (previousPreferredServerRef.current === preferredServer) return
@@ -656,8 +681,9 @@ export function OnlinestreamPage({ animeEntry, animeEntryLoading, hideBackButton
     const changeQuality = React.useCallback((source: VideoCore_VideoSource) => {
         savePreviousStateThen(() => {
             setQuality(source.resolution)
+            savePreferences({ provider, server, quality: source.resolution })
         })
-    }, [videoSource])
+    }, [videoSource, provider, server, savePreferences])
 
     // Provider
     const changeProvider = React.useCallback((provider: string) => {
@@ -667,16 +693,18 @@ export function OnlinestreamPage({ animeEntry, animeEntryLoading, hideBackButton
             if (mediaId) {
                 setProviderPreferenceByMedia(prev => ({ ...prev, [String(mediaId)]: provider }))
             }
+            savePreferences({ provider, server, quality })
         })
-    }, [videoSource, setPreferredProvider, mediaId, setProviderPreferenceByMedia])
+    }, [videoSource, setPreferredProvider, mediaId, setProviderPreferenceByMedia, savePreferences, server, quality])
 
     // Server
     const changeServer = React.useCallback((server: string) => {
         savePreviousStateThen(() => {
             setPreferredServer(server)
             setServer(server)
+            savePreferences({ provider, server, quality })
         })
-    }, [videoSource, setPreferredServer])
+    }, [videoSource, setPreferredServer, savePreferences, provider, quality])
 
     // Dubbed
     const toggleDubbed = React.useCallback(() => {

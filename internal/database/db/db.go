@@ -107,6 +107,7 @@ func migrateTables(db *gorm.DB) error {
 		&models.MediaFiller{},
 		&models.MangaMapping{},
 		&models.OnlinestreamMapping{},
+		&models.OnlinestreamPreference{},
 		&models.DebridSettings{},
 		&models.DummyDebridSettings{},
 		&models.DebridTorrentItem{},

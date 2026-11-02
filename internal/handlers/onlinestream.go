@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"seanime/internal/api/anilist"
+	"seanime/internal/database/models"
 	"seanime/internal/onlinestream"
 
 	"github.com/labstack/echo/v4"
@@ -221,6 +222,55 @@ func (h *Handler) HandleRemoveOnlinestreamMapping(c echo.Context) error {
 	}
 
 	err := h.App.OnlinestreamRepository.RemoveMapping(b.Provider, b.MediaId)
+	if err != nil {
+		return h.RespondWithError(c, err)
+	}
+
+	return h.RespondWithData(c, true)
+}
+
+// HandleGetOnlinestreamPreferences
+//
+//	@summary returns the per-anime online streaming preferences.
+//	@desc Provider, server and quality chosen for each anime, shared by all clients.
+//	@route /api/v1/onlinestream/preferences [GET]
+//	@returns []models.OnlinestreamPreference
+func (h *Handler) HandleGetOnlinestreamPreferences(c echo.Context) error {
+	prefs, err := h.App.Database.GetOnlinestreamPreferences()
+	if err != nil {
+		return h.RespondWithError(c, err)
+	}
+	return h.RespondWithData(c, prefs)
+}
+
+// HandleSetOnlinestreamPreference
+//
+//	@summary stores the online streaming preferences for an anime.
+//	@route /api/v1/onlinestream/preferences [POST]
+//	@returns bool
+func (h *Handler) HandleSetOnlinestreamPreference(c echo.Context) error {
+	type body struct {
+		MediaID  int    `json:"mediaId"`
+		Provider string `json:"provider"`
+		Server   string `json:"server"`
+		Quality  string `json:"quality"`
+	}
+
+	var b body
+	if err := c.Bind(&b); err != nil {
+		return h.RespondWithError(c, err)
+	}
+
+	if b.MediaID == 0 {
+		return h.RespondWithError(c, errors.New("mediaId is required"))
+	}
+
+	err := h.App.Database.UpsertOnlinestreamPreference(&models.OnlinestreamPreference{
+		MediaID:  b.MediaID,
+		Provider: b.Provider,
+		Server:   b.Server,
+		Quality:  b.Quality,
+	})
 	if err != nil {
 		return h.RespondWithError(c, err)
 	}

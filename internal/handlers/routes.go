@@ -369,6 +369,8 @@ func InitRoutes(app *core.App, e *echo.Echo) {
 	v1.POST("/onlinestream/manual-mapping", h.HandleOnlinestreamManualMapping)
 	v1.POST("/onlinestream/get-mapping", h.HandleGetOnlinestreamMapping)
 	v1.POST("/onlinestream/remove-mapping", h.HandleRemoveOnlinestreamMapping)
+	v1.GET("/onlinestream/preferences", h.HandleGetOnlinestreamPreferences)
+	v1.POST("/onlinestream/preferences", h.HandleSetOnlinestreamPreference)
 
 	//
 	// Metadata Provider
