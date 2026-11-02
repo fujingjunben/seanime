@@ -428,7 +428,7 @@ type (
 	}
 )
 
-func (e *VideoStatusEvent) IsCritical() bool     { return false }
+func (e *VideoStatusEvent) IsCritical() bool     { return true } // status events carry watch progress: never drop them
 func (e *VideoTimeUpdateEvent) IsCritical() bool { return false }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

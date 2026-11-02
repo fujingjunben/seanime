@@ -73,6 +73,9 @@ export function useVideoCoreBindings(videoElement: HTMLVideoElement | null,
     const setEnded = useSetAtom(vc_ended)
     const setPaused = useSetAtom(vc_paused)
 
+    // A stalled/waiting stream sets this until playback resumes.
+    const waitingRef = React.useRef(false)
+
     const prevRef = React.useRef({
         videoWidth: 0,
         videoHeight: 0,
@@ -116,8 +119,11 @@ export function useVideoCoreBindings(videoElement: HTMLVideoElement | null,
                 prev.readyState = v.readyState
                 setReadyState(v.readyState)
             }
-            // Set buffering to true if readyState is less than HAVE_ENOUGH_DATA (3) and video is not paused
-            const isBuffering = v.readyState < 3 && !v.paused
+            // Consider the video buffering when it cannot render the current frame or when the
+            // element has fired `waiting`/`stalled` and has not resumed since.
+            // (readyState can stay at HAVE_CURRENT_DATA (2) on some mobile browsers while the
+            // stream plays fine, which used to leave the spinner on forever.)
+            const isBuffering = !v.paused && (v.readyState < 2 || waitingRef.current)
             if (prev.buffering !== isBuffering) {
                 prev.buffering = isBuffering
                 setBuffering(isBuffering)
@@ -159,11 +165,28 @@ export function useVideoCoreBindings(videoElement: HTMLVideoElement | null,
         const events = ["timeupdate", "loadedmetadata", "progress", "play", "pause", "ratechange", "volumechange", "ended", "loadeddata", "resize",
             "waiting", "canplay", "stalled"]
         events.forEach(e => v.addEventListener(e, handler))
+
+        const onWaiting = () => {
+            waitingRef.current = true
+            handler()
+        }
+        const onResumed = () => {
+            waitingRef.current = false
+            handler()
+        }
+        v.addEventListener("waiting", onWaiting)
+        v.addEventListener("stalled", onWaiting)
+        v.addEventListener("playing", onResumed)
+        v.addEventListener("canplay", onResumed)
+
         handler() // initialize state once
 
         return () => {
-            console.log("Removing video event listeners")
             events.forEach(e => v.removeEventListener(e, handler))
+            v.removeEventListener("waiting", onWaiting)
+            v.removeEventListener("stalled", onWaiting)
+            v.removeEventListener("playing", onResumed)
+            v.removeEventListener("canplay", onResumed)
         }
     }, [videoElement, playbackInfo?.id])
 
